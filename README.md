@@ -121,8 +121,18 @@ After setup, these services run:
 | Service | URL | Purpose |
 |---|---|---|
 | n8n | `http://YOUR-IP:5678` | Workflow editor |
-| Supabase Studio | `http://YOUR-IP:3001` | Database admin UI |
+| Supabase Studio | `http://localhost:3001` (via SSH tunnel) | Database admin UI |
 | PostgREST API | `http://YOUR-IP:8000` | REST API for PostgreSQL |
+
+### Accessing Supabase Studio
+
+Supabase Studio is bound to `localhost` only (not publicly exposed). To access it from your browser, open an SSH tunnel:
+
+```bash
+ssh -L 3001:localhost:3001 user@YOUR-VPS-IP
+```
+
+Then open `http://localhost:3001` in your browser. The tunnel stays open as long as the SSH session runs.
 
 ---
 
