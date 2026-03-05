@@ -89,7 +89,7 @@ services:
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_PLUGINS: request-transformer,cors,key-auth,acl
     volumes:
-      - ./supabase/kong.yml:/var/lib/kong/kong.yml:ro
+      - ./supabase/kong.deployed.yml:/var/lib/kong/kong.yml:ro
     depends_on:
       - rest
     networks:
