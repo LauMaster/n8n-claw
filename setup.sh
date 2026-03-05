@@ -479,20 +479,55 @@ for f in workflows/*.json; do
 done
 IMPORT_ORDER="mcp-client reminder-factory mcp-weather-example workflow-builder mcp-builder memory-consolidation n8n-claw-agent"
 
+# Fetch existing workflows once (for upsert: update if exists, create if not)
+EXISTING_WFS=$(curl -s "${N8N_BASE}/api/v1/workflows?limit=100" \
+  -H "X-N8N-API-KEY: ${N8N_API_KEY}")
+
 for name in $IMPORT_ORDER; do
   f="workflows/deployed/${name}.json"
   [ -f "$f" ] || continue
   wf_name=$(python3 -c "import json; print(json.load(open('$f')).get('name','?'))" 2>/dev/null)
-  resp=$(curl -s -X POST "${N8N_BASE}/api/v1/workflows" \
-    -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
-    -H "Content-Type: application/json" -d @"$f")
-  wf_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
-  if [ -z "$wf_id" ]; then
-    err=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('message','unknown error'))" 2>/dev/null)
-    echo -e "  ${RED}❌ ${wf_name}: ${err}${NC}"
+
+  # Check if workflow with this name already exists
+  existing_id=$(echo "$EXISTING_WFS" | python3 -c "
+import json,sys
+name = sys.argv[1]
+data = json.load(sys.stdin)
+for wf in data.get('data', []):
+    if wf['name'] == name:
+        print(wf['id']); break
+" "$wf_name" 2>/dev/null)
+
+  if [ -n "$existing_id" ]; then
+    # UPDATE existing workflow (PUT) — preserves workflow ID, no duplicates
+    UPDATE_BODY=$(python3 -c "
+import json, sys
+wf = json.load(open(sys.argv[1]))
+print(json.dumps({
+    'name': wf['name'],
+    'nodes': wf.get('nodes', []),
+    'connections': wf.get('connections', {}),
+    'settings': wf.get('settings', {})
+}))
+" "$f" 2>/dev/null)
+    resp=$(curl -s -X PUT "${N8N_BASE}/api/v1/workflows/${existing_id}" \
+      -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
+      -H "Content-Type: application/json" -d "$UPDATE_BODY")
+    WF_IDS[$name]="$existing_id"
+    echo "  ✅ ${wf_name} → ${existing_id} (updated)"
   else
-    WF_IDS[$name]=$wf_id
-    echo "  ✅ ${wf_name} → ${wf_id}"
+    # CREATE new workflow (POST)
+    resp=$(curl -s -X POST "${N8N_BASE}/api/v1/workflows" \
+      -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
+      -H "Content-Type: application/json" -d @"$f")
+    wf_id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+    if [ -z "$wf_id" ]; then
+      err=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('message','unknown error'))" 2>/dev/null)
+      echo -e "  ${RED}❌ ${wf_name}: ${err}${NC}"
+    else
+      WF_IDS[$name]=$wf_id
+      echo "  ✅ ${wf_name} → ${wf_id} (created)"
+    fi
   fi
 done
 
