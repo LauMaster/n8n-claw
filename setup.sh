@@ -239,7 +239,7 @@ N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY \
 N8N_HOST=${N8N_HOST:-localhost} \
 N8N_PROTOCOL=${N8N_PROTOCOL:-http} \
 N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678} \
-TIMEZONE=${TIMEZONE:-Europe/Berlin} \
+TIMEZONE=${TIMEZONE:-UTC} \
   docker compose up -d 2>&1 | tail -5
 
 echo "  Waiting for database (up to 60s on first start)..."
@@ -535,6 +535,8 @@ BOT_NAME=$(cli_ask "Agent name" "Assistant")
 USER_DISPLAY=$(cli_ask "Your name" "User")
 LANG=$(cli_ask "Preferred language" "English")
 CTX=$(cli_ask "What will you use this agent for" "Personal assistant and automation")
+SYS_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "UTC")
+TIMEZONE=$(cli_ask "Timezone" "$SYS_TZ")
 
 echo ""
 echo "  Communication style:"
@@ -590,7 +592,7 @@ proact  = esc('${PROACTIVE}')
 ctx     = esc('${CTX}')
 chat_id = '${TELEGRAM_CHAT_ID}'
 mcp_url = '${N8N_URL_FOR_MCP}'
-tz      = esc('${TIMEZONE:-Europe/Berlin}')
+tz      = esc('${TIMEZONE:-UTC}')
 uname   = user.lower().replace(' ', '_')
 
 sql = f"""
