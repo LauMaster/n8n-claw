@@ -6,6 +6,8 @@ A fully self-hosted AI agent built on n8n + PostgreSQL + Claude. Talks to you vi
 
 - **Telegram chat** — talk to your AI agent directly via Telegram
 - **Long-term memory** — remembers conversations and important context in PostgreSQL with optional vector search (RAG)
+- **Task management** — create, track, and complete tasks with priorities and due dates
+- **Proactive heartbeat** — automatically reminds you of overdue/urgent tasks and sends a daily morning briefing
 - **MCP Server Builder** — builds new API integrations on demand (just ask: *"build me an MCP server for the GitHub API"*)
 - **Smart reminders** — timed Telegram reminders
 - **Extensible** — add new tools and capabilities through natural language
@@ -16,8 +18,10 @@ A fully self-hosted AI agent built on n8n + PostgreSQL + Claude. Talks to you vi
 Telegram
   ↓
 n8n-claw Agent (Claude Sonnet)
+  ├── Task Manager (create, track, complete tasks)
   ├── Memory Save/Search (PostgreSQL + vector embeddings)
   ├── Memory Consolidation (daily RAG pipeline)
+  ├── Heartbeat (proactive reminders + morning briefing)
   ├── MCP Client → MCP Servers (n8n workflows)
   ├── MCP Builder → creates new MCP Servers automatically
   └── Reminder Factory
@@ -115,12 +119,13 @@ The main agent is activated automatically by setup. In n8n UI, toggle the remain
 | Workflow | Purpose |
 |---|---|
 | 🤖 n8n-claw Agent | Main agent *(activated by setup)* |
+| 💓 Heartbeat | Proactive reminders + morning briefing *(activated by setup)* |
+| 🧠 Memory Consolidation | Daily RAG pipeline — summarizes conversations into vector memory *(activated by setup)* |
 | 🏗️ MCP Builder | Builds new MCP Server workflows on demand |
 | 🔌 MCP Client | Calls tools on MCP Servers (sub-workflow) |
 | ⏰ ReminderFactory | Creates timed Telegram reminders |
 | 🌤️ MCP: Weather | Example MCP Server — weather via Open-Meteo (no API key) |
 | ⚙️ WorkflowBuilder | Builds general n8n automations |
-| 🧠 Memory Consolidation | Daily RAG pipeline — summarizes conversations into vector memory |
 
 ### Step 4 — Start chatting
 
@@ -166,6 +171,49 @@ The MCP Builder will:
 
 ---
 
+## Task Management
+
+The agent can manage tasks for you — just tell it what you need in natural language.
+
+**Creating tasks:**
+> "Remind me to call the dentist tomorrow"
+> "Create a task: prepare presentation for Friday, high priority"
+> "I need to buy groceries by Saturday"
+
+**Checking tasks:**
+> "What are my tasks?"
+> "Show me overdue tasks"
+> "Task summary"
+
+**Updating tasks:**
+> "Mark the dentist task as done"
+> "Cancel the groceries task"
+> "Change the presentation priority to urgent"
+
+Tasks support priorities (`low`, `medium`, `high`, `urgent`), due dates, and subtasks.
+
+---
+
+## Heartbeat & Morning Briefing
+
+The Heartbeat is a background workflow that runs every 15 minutes. It checks for overdue or urgent tasks and sends you a short Telegram reminder — without you having to ask.
+
+**Proactive reminders** are enabled automatically if you chose "Proactive" during setup. You can also toggle them via chat:
+
+> "Enable the heartbeat" / "Disable proactive messages"
+
+Rate-limited to one message every 2 hours (configurable) — no spam.
+
+**Morning Briefing** sends you a daily summary at your chosen time:
+
+> "Enable morning briefing at 8am"
+> "Set morning briefing to 7:30"
+> "Disable morning briefing"
+
+The briefing includes: overdue tasks, today's tasks, and a short motivating note — in your preferred language.
+
+---
+
 ## Customization
 
 Edit the `soul` and `agents` tables directly in Supabase Studio (`http://localhost:3001` via [SSH tunnel](#accessing-supabase-studio)) to change your agent's personality, tools, and behavior — no code changes needed.
@@ -174,7 +222,9 @@ Edit the `soul` and `agents` tables directly in Supabase Studio (`http://localho
 |---|---|
 | `soul` | Agent personality (name, persona, vibe, language, boundaries) |
 | `agents` | Tool instructions, MCP config, memory behavior, user context |
-| `user_profiles` | User name, timezone, context |
+| `user_profiles` | User name, timezone, preferences (language, morning briefing) |
+| `tasks` | Task management (title, status, priority, due date, subtasks) |
+| `heartbeat_config` | Heartbeat + morning briefing settings |
 | `mcp_registry` | Available MCP servers |
 | `conversations` | Chat history |
 | `memory_long` | Long-term memory with semantic search |
