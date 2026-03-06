@@ -486,7 +486,7 @@ for f in workflows/*.json; do
   [ -n "$POSTGRES_CRED_ID" ] && [ "$POSTGRES_CRED_ID" != "REPLACE_WITH_YOUR_CREDENTIAL_ID" ] && \
     sed -i "s|REPLACE_WITH_YOUR_CREDENTIAL_ID\", \"name\": \"Supabase Postgres\"|${POSTGRES_CRED_ID}\", \"name\": \"Supabase Postgres\"|g" "$out"
 done
-IMPORT_ORDER="mcp-client reminder-factory mcp-weather-example workflow-builder mcp-builder memory-consolidation n8n-claw-agent"
+IMPORT_ORDER="mcp-client reminder-factory mcp-weather-example workflow-builder mcp-builder memory-consolidation heartbeat n8n-claw-agent"
 
 # Fetch existing workflows once (for upsert: update if exists, create if not)
 EXISTING_WFS=$(curl -s "${N8N_BASE}/api/v1/workflows?limit=100" \
@@ -620,6 +620,22 @@ if [ -n "$AGENT_ID" ]; then
   else
     echo -e "  ${YELLOW}⚠️  Agent activation: ${AGENT_ACT_ERR} — activate manually in n8n UI${NC}"
   fi
+fi
+
+# Activate Heartbeat (disabled by default — schedule trigger runs but exits early if heartbeat_config.enabled=false)
+HEARTBEAT_ID=${WF_IDS['heartbeat']}
+if [ -n "$HEARTBEAT_ID" ]; then
+  curl -s -X POST "${N8N_BASE}/api/v1/workflows/${HEARTBEAT_ID}/activate" \
+    -H "X-N8N-API-KEY: ${N8N_API_KEY}" > /dev/null 2>&1
+  echo -e "  ${GREEN}✅ Heartbeat workflow activated (heartbeat checks disabled by default — enable via agent)${NC}"
+fi
+
+# Activate Memory Consolidation
+CONSOLID_ID=${WF_IDS['memory-consolidation']}
+if [ -n "$CONSOLID_ID" ]; then
+  curl -s -X POST "${N8N_BASE}/api/v1/workflows/${CONSOLID_ID}/activate" \
+    -H "X-N8N-API-KEY: ${N8N_API_KEY}" > /dev/null 2>&1
+  echo -e "  ${GREEN}✅ Memory Consolidation workflow activated${NC}"
 fi
 
 # Helper for interactive prompts (used by both update and fresh install)
@@ -904,6 +920,36 @@ HTTP (http_request):
 - Learn from corrections: when the user corrects you, save the correction
 - Never ask for information you have already saved'),
 
+  ('task_management', 'You can manage tasks for the user via the Task Manager tool.
+
+WHEN TO CREATE TASKS:
+- User says "remind me to...", "I need to...", "add a task...", "don''t forget..."
+- User mentions a deadline or to-do item in conversation
+- Proactively suggest creating a task when the user mentions something time-sensitive
+
+WHEN TO CHECK TASKS:
+- User asks "what do I have to do?", "my tasks", "what''s pending?"
+- Before starting a conversation about planning or scheduling
+- Use the "summary" action for quick overviews
+
+WHEN TO UPDATE TASKS:
+- User says "done with X", "finished X", "cancel X"
+- Mark tasks as done when the user confirms completion
+
+SUBTASKS:
+- For complex tasks, create subtasks using parent_id
+- Example: "Plan trip" with subtasks "Book flight", "Book hotel"
+
+PRIORITIES:
+- urgent: needs attention NOW (today)
+- high: important, should be done soon (this week)
+- medium: normal tasks (default)
+- low: nice-to-have, no rush
+
+PREFERENCES (set_preference action):
+- Use to save user preferences like morning_briefing settings
+- Example: {"action":"set_preference","key":"morning_briefing","value":{"enabled":true,"time":"08:00"}}'),
+
   ('user_context', 'The user is {user}. Context: {ctx}')
 
 ON CONFLICT (key) DO UPDATE SET content = EXCLUDED.content;
@@ -921,6 +967,17 @@ else
   echo -e "  ${RED}❌ Soul table empty — DB write failed. Check postgres connection.${NC}"
 fi
 fi  # end INSTALL_MODE guard for personalization
+
+# ── Seed heartbeat_config ──────────────────────────────────────
+echo -e "${CYAN}Seeding heartbeat configuration...${NC}"
+PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U postgres -d postgres -c "
+INSERT INTO public.heartbeat_config (check_name, config, interval_minutes, enabled)
+VALUES
+  ('heartbeat', '{\"min_interval_hours\": 2}', 15, false),
+  ('morning_briefing', '{}', 1440, false)
+ON CONFLICT (check_name) DO NOTHING;
+" 2>/dev/null
+echo -e "  ${GREEN}✅ Heartbeat config seeded (disabled by default)${NC}"
 
 # ── Done ─────────────────────────────────────────────────────
 PUBLIC_IP=$(curl -s --max-time 3 https://api.ipify.org 2>/dev/null || echo "YOUR-VPS-IP")

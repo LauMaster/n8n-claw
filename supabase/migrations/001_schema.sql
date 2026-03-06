@@ -471,6 +471,53 @@ ALTER SEQUENCE public.user_profiles_id_seq OWNED BY public.user_profiles.id;
 
 
 --
+-- Name: tasks; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.tasks (
+    id integer NOT NULL,
+    user_id text NOT NULL,
+    title text NOT NULL,
+    description text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    priority text DEFAULT 'medium'::text NOT NULL,
+    due_date timestamp with time zone,
+    parent_id integer,
+    tags text[] DEFAULT '{}'::text[],
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    completed_at timestamp with time zone,
+    CONSTRAINT tasks_status_check CHECK (status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'done'::text, 'cancelled'::text])),
+    CONSTRAINT tasks_priority_check CHECK (priority = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'urgent'::text]))
+);
+
+
+ALTER TABLE public.tasks OWNER TO postgres;
+
+--
+-- Name: tasks_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.tasks_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tasks_id_seq OWNER TO postgres;
+
+--
+-- Name: tasks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.tasks_id_seq OWNED BY public.tasks.id;
+
+
+--
 -- Name: agents id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -531,6 +578,13 @@ ALTER TABLE ONLY public.tools_config ALTER COLUMN id SET DEFAULT nextval('public
 --
 
 ALTER TABLE ONLY public.user_profiles ALTER COLUMN id SET DEFAULT nextval('public.user_profiles_id_seq'::regclass);
+
+
+--
+-- Name: tasks id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tasks ALTER COLUMN id SET DEFAULT nextval('public.tasks_id_seq'::regclass);
 
 
 --
@@ -651,6 +705,43 @@ ALTER TABLE ONLY public.user_profiles
 
 ALTER TABLE ONLY public.user_profiles
     ADD CONSTRAINT user_profiles_user_id_key UNIQUE (user_id);
+
+
+--
+-- Name: tasks tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tasks tasks_parent_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_parent_fk FOREIGN KEY (parent_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: idx_tasks_user_status; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tasks_user_status ON public.tasks USING btree (user_id, status);
+
+
+--
+-- Name: idx_tasks_due_date; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tasks_due_date ON public.tasks USING btree (due_date) WHERE (due_date IS NOT NULL);
+
+
+--
+-- Name: idx_tasks_parent; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tasks_parent ON public.tasks USING btree (parent_id) WHERE (parent_id IS NOT NULL);
 
 
 --
@@ -897,6 +988,15 @@ GRANT ALL ON TABLE public.user_profiles TO service_role;
 GRANT ALL ON SEQUENCE public.user_profiles_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.user_profiles_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.user_profiles_id_seq TO service_role;
+
+
+GRANT ALL ON TABLE public.tasks TO anon;
+GRANT ALL ON TABLE public.tasks TO authenticated;
+GRANT ALL ON TABLE public.tasks TO service_role;
+
+GRANT ALL ON SEQUENCE public.tasks_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.tasks_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.tasks_id_seq TO service_role;
 
 
 --
