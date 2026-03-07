@@ -63,7 +63,7 @@ services:
     container_name: n8n-claw-rest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "172.17.0.1:3000:3000"
     environment:
       PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       PGRST_DB_SCHEMA: public
@@ -82,7 +82,7 @@ services:
     container_name: n8n-claw-kong
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"
+      - "172.17.0.1:8000:8000"
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
@@ -101,7 +101,7 @@ services:
     container_name: n8n-claw-studio
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3000"
+      - "172.17.0.1:3001:3000"
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -142,7 +142,7 @@ services:
     container_name: n8n-claw-searxng
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8888:8080"
+      - "172.17.0.1:8888:8080"
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     networks:
