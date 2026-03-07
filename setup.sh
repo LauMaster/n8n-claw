@@ -287,26 +287,19 @@ if [ -n "$DOMAIN" ] && [[ "$DOMAIN" != "your_"* ]]; then
 
   # Install nginx + certbot
   apt-get install -y nginx certbot python3-certbot-nginx -qq
-  systemctl stop nginx 2>/dev/null || true
 
-  # Get certificate
-  certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos \
-    --email "admin@${DOMAIN}" --no-eff-email 2>&1 | tail -3
+  # Remove any stale certbot accounts (corrupt empty-body registrations from pkg install)
+  rm -rf /etc/letsencrypt/accounts
 
-  # Write nginx config
+  # Write HTTP-only nginx config first (certbot --nginx will add SSL block itself)
+  rm -f /etc/nginx/sites-enabled/default
   cat > /etc/nginx/sites-available/n8n-claw << NGINX
 server {
     listen 80;
     server_name ${DOMAIN};
-    return 301 https://\$host\$request_uri;
-}
-server {
-    listen 443 ssl;
-    server_name ${DOMAIN};
-    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
     location / {
-        proxy_pass http://localhost:5678;
+        proxy_pass http://127.0.0.1:5678;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -318,26 +311,34 @@ server {
 }
 NGINX
   ln -sf /etc/nginx/sites-available/n8n-claw /etc/nginx/sites-enabled/
-  rm -f /etc/nginx/sites-enabled/default
   systemctl start nginx
   systemctl enable nginx
 
-  # Update n8n webhook URL to HTTPS
-  set_env "N8N_WEBHOOK_URL" "https://${DOMAIN}"
-  set_env "N8N_HOST" "${DOMAIN}"
-  set_env "N8N_PROTOCOL" "https"
-  set_env "N8N_SECURE_COOKIE" "true"
-  _load_env
+  # Get certificate and let certbot patch the nginx config automatically
+  if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+      --email "admin@${DOMAIN}" --no-eff-email 2>&1 | tail -3; then
 
-  # Restart n8n with HTTPS config
-  N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
-  SUPABASE_JWT_SECRET=$SUPABASE_JWT_SECRET N8N_WEBHOOK_URL="https://${DOMAIN}" \
-  N8N_HOST=$DOMAIN N8N_PROTOCOL=https N8N_SECURE_COOKIE=true \
-    docker compose up -d n8n > /dev/null 2>&1
-  sleep 5
+    # Update n8n webhook URL to HTTPS
+    set_env "N8N_WEBHOOK_URL" "https://${DOMAIN}"
+    set_env "N8N_HOST" "${DOMAIN}"
+    set_env "N8N_PROTOCOL" "https"
+    set_env "N8N_SECURE_COOKIE" "true"
+    _load_env
 
-  echo -e "  ${GREEN}✅ HTTPS ready at https://${DOMAIN}${NC}"
-  N8N_ACCESS_URL="https://${DOMAIN}"
+    # Restart n8n with HTTPS config
+    N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+    SUPABASE_JWT_SECRET=$SUPABASE_JWT_SECRET N8N_WEBHOOK_URL="https://${DOMAIN}" \
+    N8N_HOST=$DOMAIN N8N_PROTOCOL=https N8N_SECURE_COOKIE=true \
+      docker compose up -d n8n > /dev/null 2>&1
+    sleep 5
+
+    echo -e "  ${GREEN}✅ HTTPS ready at https://${DOMAIN}${NC}"
+    N8N_ACCESS_URL="https://${DOMAIN}"
+  else
+    echo -e "  ${YELLOW}⚠️  Certbot failed — n8n running on HTTP at http://${DOMAIN}${NC}"
+    echo "     Check DNS and re-run: certbot --nginx -d ${DOMAIN}"
+    N8N_ACCESS_URL="http://${DOMAIN}"
+  fi
 else
   echo -e "\n${YELLOW}⚠️  No domain configured — running on HTTP${NC}"
   echo "  Telegram webhooks require HTTPS. Add a domain later and re-run setup.sh"
